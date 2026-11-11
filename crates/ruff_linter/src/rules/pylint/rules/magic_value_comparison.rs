@@ -1,0 +1,159 @@
+use itertools::Itertools;
+use ruff_python_ast::helpers::map_subscript;
+use ruff_python_ast::{self as ast, Expr, LiteralExpressionRef, UnaryOp};
+use ruff_python_semantic::SemanticModel;
+
+use ruff_macros::{ViolationMetadata, derive_message_formats};
+use ruff_text_size::Ranged;
+
+use crate::Violation;
+use crate::checkers::ast::Checker;
+use crate::codes::Category;
+use crate::rules::pylint::settings::{ConstantType, Settings};
+
+/// ## What it does
+/// Checks for the use of unnamed hard-coded ("magic") values in comparisons.
+///
+/// ## Why is this bad?
+/// The use of magic values can make code harder to read and maintain, as
+/// readers will have to infer the meaning of the value from the context.
+/// Such values are discouraged by [PEP 8] and should be replaced with variables
+/// or named constants.
+///
+/// By default, this rule excludes a variety of common values from the
+/// magic value definition, namely `0`, `1`, `-1`, `0.0`, `1.0`, `-1.0`, `""`, and
+/// `"__main__"`. It also exempts comparisons against `sys.version`,
+/// `sys.version_info`, and `sys.implementation.version`.
+///
+/// ## Example
+/// ```python
+/// def apply_discount(price: float) -> float:
+///     if price <= 100:
+///         return price / 2
+///     else:
+///         return price
+/// ```
+///
+/// Use instead:
+/// ```python
+/// MAX_DISCOUNT = 100
+///
+///
+/// def apply_discount(price: float) -> float:
+///     if price <= MAX_DISCOUNT:
+///         return price / 2
+///     else:
+///         return price
+/// ```
+///
+/// ## Options
+/// - `lint.pylint.allow-magic-value-types`
+/// - `lint.pylint.allow-magic-values`
+/// - `lint.pylint.extend-allow-magic-values`
+///
+/// [PEP 8]: https://peps.python.org/pep-0008/#constants
+#[derive(ViolationMetadata)]
+#[violation_metadata(stable_since = "v0.0.221", category = Category::Pedantic)]
+pub(crate) struct MagicValueComparison {
+    value: String,
+}
+
+impl Violation for MagicValueComparison {
+    #[derive_message_formats]
+    fn message(&self) -> String {
+        let MagicValueComparison { value } = self;
+        format!(
+            "Magic value used in comparison, consider replacing `{value}` with a constant variable"
+        )
+    }
+}
+
+/// If an [`Expr`] is a literal (or unary operation on a literal), return the [`LiteralExpressionRef`]
+/// and its unary operator, if any.
+fn as_literal(expr: &Expr) -> Option<(LiteralExpressionRef<'_>, Option<&UnaryOp>)> {
+    match expr {
+        Expr::UnaryOp(ast::ExprUnaryOp { op, operand, .. })
+            if matches!(op, UnaryOp::UAdd | UnaryOp::USub | UnaryOp::Invert) =>
+        {
+            operand.as_literal_expr().map(|literal| (literal, Some(op)))
+        }
+        _ => expr.as_literal_expr().map(|literal| (literal, None)),
+    }
+}
+
+fn is_magic_value(
+    literal_expr: LiteralExpressionRef,
+    unary_op: Option<&UnaryOp>,
+    settings: &Settings,
+) -> bool {
+    // Check if the literal type is in the allowed types list
+    if let Some(constant_type) = ConstantType::try_from_literal_expr(literal_expr) {
+        if settings.allow_magic_value_types.contains(&constant_type) {
+            return false;
+        }
+    }
+
+    // Check if the literal value is in the allowed values list
+    if settings
+        .allow_magic_values
+        .iter()
+        .any(|value| value.matches_value(literal_expr, unary_op))
+    {
+        return false;
+    }
+
+    // Ignore `None`, `Bool`, and `Ellipsis` constants.
+    !matches!(
+        literal_expr,
+        LiteralExpressionRef::NoneLiteral(_)
+            | LiteralExpressionRef::BooleanLiteral(_)
+            | LiteralExpressionRef::EllipsisLiteral(_)
+    )
+}
+
+/// Returns `true` if `expr` is a comparand whose value is derived from the
+/// running interpreter's version, such as `sys.version`, `sys.version_info`,
+/// `sys.implementation.version`, or a subscript/attribute access on any of
+/// them (for example, `sys.version_info[0]` or
+/// `sys.implementation.version.major`).
+fn is_sys_version_comparand(expr: &Expr, semantic: &SemanticModel) -> bool {
+    let Some(qualified_name) = semantic.resolve_qualified_name(map_subscript(expr)) else {
+        return false;
+    };
+    matches!(
+        qualified_name.segments(),
+        ["sys", "version" | "version_info", ..] | ["sys", "implementation", "version", ..]
+    )
+}
+
+/// PLR2004
+pub(crate) fn magic_value_comparison(checker: &Checker, operands: &[Expr]) {
+    for (left, right) in operands.iter().tuple_windows() {
+        // If both of the comparators are literals, skip rule for the whole expression.
+        // R0133: comparison-of-constants
+        if as_literal(left).is_some() && as_literal(right).is_some() {
+            return;
+        }
+    }
+
+    let mut previous = None;
+    let mut operands = operands.iter().peekable();
+    while let Some(comparison_expr) = operands.next() {
+        if let Some((value, unary_op)) = as_literal(comparison_expr)
+            && is_magic_value(value, unary_op, &checker.settings().pylint)
+            && !previous.is_some_and(|expr| is_sys_version_comparand(expr, checker.semantic()))
+            && !operands
+                .peek()
+                .is_some_and(|expr| is_sys_version_comparand(expr, checker.semantic()))
+        {
+            checker.report_diagnostic(
+                MagicValueComparison {
+                    value: checker.locator().slice(comparison_expr).to_string(),
+                },
+                comparison_expr.range(),
+            );
+        }
+
+        previous = Some(comparison_expr);
+    }
+}

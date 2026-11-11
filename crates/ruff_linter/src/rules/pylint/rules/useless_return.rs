@@ -1,0 +1,141 @@
+use ruff_macros::{ViolationMetadata, derive_message_formats};
+use ruff_python_ast::helpers::ReturnStatementVisitor;
+use ruff_python_ast::statement_visitor::StatementVisitor;
+use ruff_python_ast::whitespace::trailing_comment_start_offset;
+use ruff_python_ast::{self as ast, Expr, Stmt};
+use ruff_text_size::Ranged;
+
+use crate::checkers::ast::Checker;
+use crate::codes::Category;
+use crate::fix;
+use crate::{AlwaysFixableViolation, Applicability, Edit, Fix};
+
+/// ## What it does
+/// Checks for functions that end with an unnecessary `return` or
+/// `return None`, and contain no other `return` statements.
+///
+/// ## Why is this bad?
+/// Python implicitly assumes a `None` return at the end of a function, making
+/// it unnecessary to explicitly write `return None`.
+///
+/// ## Example
+/// ```python
+/// def f():
+///     print(5)
+///     return None
+/// ```
+///
+/// Use instead:
+/// ```python
+/// def f():
+///     print(5)
+/// ```
+///
+/// ## Fix safety
+/// A trailing comment on the same line as the `return` statement is preserved.
+/// The fix is marked as unsafe if it would delete any other comments, such as
+/// comments inside a parenthesized return value.
+#[derive(ViolationMetadata)]
+#[violation_metadata(stable_since = "v0.0.257", category = Category::Complexity)]
+pub(crate) struct UselessReturn;
+
+impl AlwaysFixableViolation for UselessReturn {
+    #[derive_message_formats]
+    fn message(&self) -> String {
+        "Useless `return` statement at end of function".to_string()
+    }
+
+    fn fix_title(&self) -> String {
+        "Remove useless `return` statement".to_string()
+    }
+}
+
+/// PLR1711
+pub(crate) fn useless_return(
+    checker: &Checker,
+    stmt: &Stmt,
+    body: &[Stmt],
+    returns: Option<&Expr>,
+) {
+    // Skip functions that have a return annotation that is not `None`.
+    if !returns.is_none_or(Expr::is_none_literal_expr) {
+        return;
+    }
+
+    // Find the last statement in the function.
+    let Some(last_stmt) = body.last() else {
+        // Skip empty functions.
+        return;
+    };
+
+    // Verify that the last statement is a return statement.
+    let Stmt::Return(ast::StmtReturn {
+        value,
+        range: _,
+        node_index: _,
+    }) = &last_stmt
+    else {
+        return;
+    };
+
+    // Skip functions that consist of a single return statement.
+    if body.len() == 1 {
+        return;
+    }
+
+    // Skip functions that consist of a docstring and a return statement.
+    if body.len() == 2 {
+        if let Stmt::Expr(ast::StmtExpr {
+            value,
+            range: _,
+            node_index: _,
+        }) = &body[0]
+        {
+            if value.is_string_literal_expr() {
+                return;
+            }
+        }
+    }
+
+    // Verify that the return statement is either bare or returns `None`.
+    if !value
+        .as_ref()
+        .is_none_or(|expr| expr.is_none_literal_expr())
+    {
+        return;
+    }
+
+    // Finally: verify that there are no _other_ return statements in the function.
+    let mut visitor = ReturnStatementVisitor::default();
+    visitor.visit_body(body);
+    if visitor.returns.len() > 1 {
+        return;
+    }
+
+    let mut diagnostic = checker.report_diagnostic(UselessReturn, last_stmt.range());
+
+    // Preserve a trailing comment on the same line as the `return` statement.
+    let edit = if let Some(index) = trailing_comment_start_offset(last_stmt, checker.source()) {
+        Edit::range_deletion(last_stmt.range().add_end(index))
+    } else {
+        fix::edits::delete_stmt(last_stmt, Some(stmt), checker.locator(), checker.indexer())
+    };
+
+    // Mark the fix as unsafe if it would still delete comments, e.g., inside a parenthesized
+    // return value.
+    let applicability = if checker
+        .comment_ranges()
+        .comments_in_range(edit.range())
+        .is_empty()
+    {
+        Applicability::Safe
+    } else {
+        Applicability::Unsafe
+    };
+
+    diagnostic.set_fix(
+        Fix::applicable_edit(edit, applicability).isolate(Checker::isolation(
+            checker.semantic().current_statement_id(),
+        )),
+    );
+}

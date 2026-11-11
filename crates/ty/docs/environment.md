@@ -1,0 +1,138 @@
+# Environment variables
+
+ty defines and respects the following environment variables:
+
+### `TY_CONFIG_FILE`
+
+Path to a `ty.toml` configuration file to use.
+
+When set, ty will use this file for configuration instead of
+discovering configuration files automatically.
+
+Equivalent to the `--config-file` command-line argument.
+
+### `TY_LOG`
+
+If set, ty will use this value as the log level for its `--verbose` output.
+Accepts any filter compatible with the `tracing_subscriber` crate.
+
+For example:
+
+- `TY_LOG=ty=debug` is the equivalent of `-vv` to the command line
+- `TY_LOG=trace` will enable all trace-level logging.
+
+See the [tracing documentation](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#example-syntax)
+for more.
+
+### `TY_LOG_PROFILE`
+
+If set to `"1"` or `"true"`, ty will enable flamegraph profiling.
+This creates a `tracing.folded` file that can be used to generate flame graphs
+for performance analysis.
+
+### `TY_MAX_PARALLELISM`
+
+Specifies an upper limit for the number of tasks ty is allowed to run in parallel.
+
+For example, how many files should be checked in parallel.
+This isn't the same as a thread limit. ty may spawn additional threads
+when necessary, e.g. to watch for file system changes or a dedicated UI thread.
+
+### `TY_OUTPUT_FORMAT`
+
+The format to use for printing diagnostic messages.
+
+When set, ty will use this format for output instead of the default.
+
+Accepts the same values as the `--output-format` command-line argument.
+
+### `TY_UV`
+
+Enable and configure uv integration.
+
+When set to `scripts`, ty uses [uv](https://docs.astral.sh/uv/) to create and update a
+Python environment for each script with [inline metadata](https://peps.python.org/pep-0723/).
+
+When set to `1` or `true`, ty also uses uv to discover the workspace root and its Python
+environment.
+
+## Externally-defined variables
+
+ty also reads the following externally defined environment variables:
+
+### `CLICOLOR`
+
+Controls color in `ty check` diagnostics when stdout is a terminal.
+
+Setting this to `0` disables color. Any other non-empty value enables color, even if
+`TERM=dumb`. An empty value has the same effect as leaving the variable unset.
+
+An explicit `--color=always` or `--color=never` takes precedence, as does a non-empty
+`NO_COLOR`, `FORCE_COLOR`, or `CLICOLOR_FORCE` environment variable.
+
+### `CLICOLOR_FORCE`
+
+Alias for [`FORCE_COLOR`](#force_color).
+
+### `CONDA_DEFAULT_ENV`
+
+Used to determine the name of the active Conda environment.
+
+### `CONDA_PREFIX`
+
+The path to the active Conda or Pixi environment. If it contains no Python interpreter,
+ty continues searching, including in the project's `.venv`.
+A non-empty `VIRTUAL_ENV` takes precedence.
+
+### `FORCE_COLOR`
+
+Controls color in `ty check` diagnostics, including when piped.
+
+Setting this to any non-empty value (including `0`) forces color. An empty value has the
+same effect as leaving the variable unset. All of the following have higher precedence:
+setting the `NO_COLOR` environment variable to a non-empty value, passing `--color=always`,
+or passing `--color=never`.
+
+### `NO_COLOR`
+
+Controls color in `ty check` diagnostics, including when piped.
+
+Setting this to any non-empty value (including `0`) disables color in diagnostics.
+Setting it to an empty value causes ty to defer to other environment variables and heuristics
+such as whether stdout is a tty.
+
+Passing `--color always` or `--color never` takes precedence over this environment variable.
+
+### `PYTHONPATH`
+
+Adds additional directories to ty's search paths.
+The format is the same as the shell’s PATH:
+one or more directory pathnames separated by os appropriate pathsep
+(e.g. colons on Unix or semicolons on Windows).
+
+### `RAYON_NUM_THREADS`
+
+Specifies an upper limit for the number of threads ty uses when performing work in parallel.
+Equivalent to `TY_MAX_PARALLELISM`.
+
+This is a standard Rayon environment variable.
+
+### `TERM`
+
+In automatic mode, `ty check` uses color when stdout is a terminal unless `TERM` is
+exactly `dumb`. An empty or unset `TERM` allows color on a terminal. An explicit
+`--color=always` or `--color=never` takes precedence, as does a non-empty `NO_COLOR`,
+`FORCE_COLOR`, `CLICOLOR_FORCE`, or `CLICOLOR` environment variable.
+
+### `VIRTUAL_ENV`
+
+Used to detect an activated virtual environment.
+
+### `XDG_CONFIG_HOME`
+
+Path to user-level configuration directory on Unix systems.
+
+### `_CONDA_ROOT`
+
+Used to determine the root install path of Conda.
+

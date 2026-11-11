@@ -1,0 +1,20 @@
+---
+source: crates/ruff_linter/src/rules/flake8_type_checking/mod.rs
+---
+TC003 [*] Make standard library import `pathlib.Path` lazy
+ --> singledispatchmethod.py:4:21
+  |
+3 | from collections.abc import MutableMapping, Mapping
+4 | from pathlib import Path
+  |                     ^^^^
+5 | from functools import singledispatchmethod
+6 | from typing import Union
+  |
+help: Convert to a lazy import (or move into a type-checking block)
+  |
+3 | from collections.abc import MutableMapping, Mapping
+  - from pathlib import Path
+4 + lazy from pathlib import Path
+5 | from functools import singledispatchmethod
+  |
+note: This is an unsafe fix and may change runtime behavior
