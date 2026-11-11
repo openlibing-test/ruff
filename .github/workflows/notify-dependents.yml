@@ -4,12 +4,15 @@
 # job within `cargo-dist`.
 name: "[ruff] Notify dependents"
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_call:
+#     inputs:
+#       plan:
+#         required: true
+#         type: string
 on:
-  workflow_call:
-    inputs:
-      plan:
-        required: true
-        type: string
+  workflow_dispatch:
 
 permissions: {}
 

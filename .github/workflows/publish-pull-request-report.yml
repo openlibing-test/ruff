@@ -1,38 +1,41 @@
 name: Publish a pull request report
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_call:
+#     inputs:
+#       report:
+#         type: string
+#         required: true
+#       artifact:
+#         type: string
+#         required: true
+#       filename:
+#         type: string
+#         required: true
+#       title:
+#         type: string
+#         default: ""
+#       update-existing-only:
+#         description: Update the report only if its comment already exists on the pull request.
+#         type: boolean
+#         default: false
+#       full-report-artifact:
+#         type: string
+#         default: ""
+#       upload-html:
+#         type: boolean
+#         default: false
+#       html-files:
+#         type: string
+#         default: "{}"
+#     secrets:
+#       KV_API_URL:
+#         required: true
+#       STS_API_URL:
+#         required: true
 on:
-  workflow_call:
-    inputs:
-      report:
-        type: string
-        required: true
-      artifact:
-        type: string
-        required: true
-      filename:
-        type: string
-        required: true
-      title:
-        type: string
-        default: ""
-      update-existing-only:
-        description: Update the report only if its comment already exists on the pull request.
-        type: boolean
-        default: false
-      full-report-artifact:
-        type: string
-        default: ""
-      upload-html:
-        type: boolean
-        default: false
-      html-files:
-        type: string
-        default: "{}"
-    secrets:
-      KV_API_URL:
-        required: true
-      STS_API_URL:
-        required: true
+  workflow_dispatch:
 
 permissions: {}
 

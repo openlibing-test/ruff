@@ -7,16 +7,19 @@
 # sharing the built image as an artifact between jobs is challenging.
 name: "[ruff] Build Docker image"
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_call:
+#     inputs:
+#       plan:
+#         required: true
+#         type: string
+#   pull_request:
+#     paths:
+#       - .github/workflows/build-docker.yml
+#       - Dockerfile
 on:
-  workflow_call:
-    inputs:
-      plan:
-        required: true
-        type: string
-  pull_request:
-    paths:
-      - .github/workflows/build-docker.yml
-      - Dockerfile
+  workflow_dispatch:
 
 env:
   UV_LOCKED: 1

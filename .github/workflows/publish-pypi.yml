@@ -4,16 +4,19 @@
 # within `cargo-dist`.
 name: "[ruff] Publish to PyPI"
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_call:
+#     inputs:
+#       plan:
+#         required: true
+#         type: string
+#       artifacts:
+#         description: "Artifact ID for the complete verified PyPI distributions"
+#         required: true
+#         type: string
 on:
-  workflow_call:
-    inputs:
-      plan:
-        required: true
-        type: string
-      artifacts:
-        description: "Artifact ID for the complete verified PyPI distributions"
-        required: true
-        type: string
+  workflow_dispatch:
 
 env:
   UV_LOCKED: 1

@@ -1,10 +1,13 @@
 name: "[Playground] Build"
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_call:
+#     outputs:
+#       artifact-id:
+#         value: ${{ jobs.build.outputs.artifact-id }}
 on:
-  workflow_call:
-    outputs:
-      artifact-id:
-        value: ${{ jobs.build.outputs.artifact-id }}
+  workflow_dispatch:
 
 env:
   UV_LOCKED: 1

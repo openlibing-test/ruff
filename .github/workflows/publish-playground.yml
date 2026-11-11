@@ -4,16 +4,19 @@
 # job within `cargo-dist`.
 name: "[Playground] Release"
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_dispatch:
+#   workflow_call:
+#     inputs:
+#       plan:
+#         required: true
+#         type: string
+#       artifact-id:
+#         required: true
+#         type: string
 on:
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      plan:
-        required: true
-        type: string
-      artifact-id:
-        required: true
-        type: string
 
 env:
   UV_LOCKED: 1

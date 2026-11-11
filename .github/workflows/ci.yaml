@@ -3,10 +3,13 @@ name: CI
 permissions:
   contents: read
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#   workflow_dispatch:
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 concurrency:

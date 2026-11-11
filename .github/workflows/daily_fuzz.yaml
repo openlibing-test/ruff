@@ -1,14 +1,17 @@
 name: Daily parser fuzz
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_dispatch:
+#   schedule:
+#     - cron: "0 0 * * *"
+#   pull_request:
+#     paths:
+#       - ".github/workflows/daily_fuzz.yaml"
+#       - ".github/actions/setup-ruff-workspace/action.yml"
+#       - "python/py-fuzzer/**"
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"
-  pull_request:
-    paths:
-      - ".github/workflows/daily_fuzz.yaml"
-      - ".github/actions/setup-ruff-workspace/action.yml"
-      - "python/py-fuzzer/**"
 
 permissions:
   contents: read

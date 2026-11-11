@@ -1,8 +1,11 @@
 name: Sync ruff-security
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   push:
+#     branches: [main]
+#   workflow_dispatch:
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions: {}

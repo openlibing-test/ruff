@@ -38,8 +38,17 @@ permissions: {}
 #
 # If there's a prerelease-style suffix to the version, then the release(s)
 # will be marked as a prerelease.
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   pull_request:
+#   workflow_dispatch:
+#     inputs:
+#       tag:
+#         description: Release Tag
+#         required: true
+#         default: dry-run
+#         type: string
 on:
-  pull_request:
   workflow_dispatch:
     inputs:
       tag:

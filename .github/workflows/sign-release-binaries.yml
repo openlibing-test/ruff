@@ -1,15 +1,18 @@
 # Sign and verify ruff's macOS and Windows wheels and GitHub release archives.
 name: "Sign release binaries"
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_call:
+#     outputs:
+#       pypi-artifacts:
+#         description: "Artifact ID for all release wheels and the source distribution"
+#         value: ${{ jobs.assemble.outputs.pypi-artifacts }}
+#       github-archives:
+#         description: "Artifact ID for signed native GitHub archives and checksums"
+#         value: ${{ jobs.assemble.outputs.github-archives }}
 on:
-  workflow_call:
-    outputs:
-      pypi-artifacts:
-        description: "Artifact ID for all release wheels and the source distribution"
-        value: ${{ jobs.assemble.outputs.pypi-artifacts }}
-      github-archives:
-        description: "Artifact ID for signed native GitHub archives and checksums"
-        value: ${{ jobs.assemble.outputs.github-archives }}
+  workflow_dispatch:
 
 permissions: {}
 

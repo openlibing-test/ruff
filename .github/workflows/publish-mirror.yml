@@ -3,16 +3,19 @@
 # Assumed to run as a subworkflow of .github/workflows/release.yml as a custom publish job
 name: publish-mirror
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_call:
+#     inputs:
+#       plan:
+#         required: true
+#         type: string
+#       signed-archives:
+#         description: "Artifact ID for the verified native archives and checksums"
+#         required: true
+#         type: string
 on:
-  workflow_call:
-    inputs:
-      plan:
-        required: true
-        type: string
-      signed-archives:
-        description: "Artifact ID for the verified native archives and checksums"
-        required: true
-        type: string
+  workflow_dispatch:
 
 permissions: {}
 

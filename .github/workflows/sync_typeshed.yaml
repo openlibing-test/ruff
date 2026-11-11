@@ -25,11 +25,14 @@ name: Sync typeshed
 #    b. Creates a PR against the `main` branch as long as step 3 succeeded
 # 6. If any required step failed, an issue is created in the `astral-sh/ruff` repository
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   workflow_dispatch:
+#   schedule:
+#     # Run on the 1st and the 15th of every month:
+#     - cron: "0 0 1,15 * *"
 on:
   workflow_dispatch:
-  schedule:
-    # Run on the 1st and the 15th of every month:
-    - cron: "0 0 1,15 * *"
 
 defaults:
   run:

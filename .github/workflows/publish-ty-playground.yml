@@ -4,17 +4,20 @@ name: "[ty Playground] Release"
 permissions:
   contents: read
 
+# Original triggers preserved; manual-only for test cost control.
+# on:
+#   push:
+#     branches: [main]
+#     paths:
+#       - "crates/ty*/**"
+#       - "crates/ruff_db/**"
+#       - "crates/ruff_python_ast/**"
+#       - "crates/ruff_python_edits/**"
+#       - "crates/ruff_python_parser/**"
+#       - "playground/**"
+#       - ".github/workflows/publish-ty-playground.yml"
 on:
-  push:
-    branches: [main]
-    paths:
-      - "crates/ty*/**"
-      - "crates/ruff_db/**"
-      - "crates/ruff_python_ast/**"
-      - "crates/ruff_python_edits/**"
-      - "crates/ruff_python_parser/**"
-      - "playground/**"
-      - ".github/workflows/publish-ty-playground.yml"
+  workflow_dispatch:
 
 concurrency:
   group: publish-ty-playground-${{ github.ref_name }}
