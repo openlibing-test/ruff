@@ -10,7 +10,7 @@ permissions:
   contents: read
   id-token: write
 env:
-  RUST_TOOLCHAIN: '1.98.1'
+  RUST_TOOLCHAIN: '1.99.0'
   CLIPPY_SARIF: '0.8.0'
 jobs:
   clippy-scan-upload:
