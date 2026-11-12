@@ -1,0 +1,165 @@
+name: Bandit documentation verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [validation/bandit-docs]
+    paths: [.github/workflows/bandit-scan.yml]
+
+permissions: {}
+
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Install documented Bandit version
+        run: |
+          python3 -m pip install 'bandit[sarif]==1.9.4'
+          mkdir -p bandit-evidence
+          python3 -m pip freeze > bandit-evidence/packages.txt
+      - name: Preserve source inventory and configure report verification
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+          import zipfile
+
+          files = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")
+          files = [name for name in files if name]
+          counts = {ext: sum(name.endswith(ext) for name in files) for ext in (".py", ".pyi", ".rs")}
+          Path("bandit-evidence/source-inventory.json").write_text(json.dumps(counts, indent=2))
+          with zipfile.ZipFile("bandit-evidence/source-snapshot.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+              for name in files:
+                  if name.endswith(".py") or name in ("AGENTS.md", "Cargo.toml", "pyproject.toml", "rust-toolchain.toml", ".github/workflows/bandit-scan.yml"):
+                      archive.write(name)
+          PY
+          cat > "$RUNNER_TEMP/verify-bandit.py" <<'PY'
+          # /// script
+          # requires-python = ">=3.12"
+          # dependencies = []
+          # ///
+          import collections
+          import json
+          from pathlib import Path
+          import sys
+          from urllib.parse import unquote
+
+          phase = sys.argv[1]
+          root = Path.cwd().resolve()
+          report = json.loads(Path("bandit-report.sarif").read_text(encoding="utf-8"))
+          if report.get("version") != "2.1.0" or not report.get("runs"):
+              raise ValueError("Invalid SARIF structure")
+          levels, rules, roots = collections.Counter(), collections.Counter(), collections.Counter()
+          matched, missing, invalid, eof = 0, [], [], []
+          notifications = []
+          metrics = []
+          for run in report["runs"]:
+              driver = run["tool"]["driver"]
+              if driver["name"].lower() != "bandit" or driver["version"] != "1.9.4":
+                  raise ValueError(driver)
+              notifications.extend(run.get("invocations", []))
+              metrics.append(run.get("properties", {}).get("metrics", {}))
+              for result in run.get("results", []):
+                  levels[result.get("level", "warning")] += 1
+                  rules[result["ruleId"]] += 1
+                  for location in result.get("locations", []):
+                      physical = location["physicalLocation"]
+                      uri = unquote(physical["artifactLocation"]["uri"])
+                      roots[uri.removeprefix("./").split("/")[0]] += 1
+                      path = (root / uri).resolve()
+                      if not path.is_relative_to(root) or not path.is_file() or ".private-actions" in path.parts:
+                          invalid.append(uri)
+                          continue
+                      lines = path.read_text(encoding="utf-8").splitlines()
+                      region = physical.get("region", {})
+                      start, end = region.get("startLine"), region.get("endLine", region.get("startLine"))
+                      if not isinstance(start, int) or not 1 <= start <= len(lines):
+                          invalid.append(uri)
+                          continue
+                      text = region.get("snippet", {}).get("text")
+                      if text is None or text.rstrip("\n") != "\n".join(lines[start - 1:end]).rstrip("\n"):
+                          missing.append({"uri": uri, "start": start})
+                      else:
+                          matched += 1
+                      context = physical.get("contextRegion", {})
+                      if context.get("endLine", 0) > len(lines):
+                          eof.append({"uri": uri, "end": context["endLine"], "source_lines": len(lines)})
+          summary = {"phase": phase, "results": sum(levels.values()), "levels": dict(levels), "rules": dict(rules), "root_counts": dict(roots), "matching_issue_snippets": matched, "invalid_locations": invalid, "snippet_mismatches": missing, "contexts_past_eof": eof, "invocations": notifications, "metrics": metrics, "schema_validation": "basic structure only"}
+          if phase == "after":
+              before = json.loads(Path("bandit-evidence/summary-before.json").read_text())
+              for key in ("results", "levels", "rules", "root_counts"):
+                  if before[key] != summary[key]:
+                      raise ValueError(f"Uploader changed {key}")
+          Path(f"bandit-evidence/summary-{phase}.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+          print(json.dumps({key: value for key, value in summary.items() if key not in ("metrics", "invocations", "contexts_past_eof")}, indent=2))
+          if invalid or missing:
+              raise ValueError("Invalid report locations or snippets")
+          PY
+      - name: Run documented full scan
+        run: |
+          rc=0
+          python3 -m bandit -r . -f sarif -o bandit-report.sarif > bandit-evidence/scan.stdout 2> bandit-evidence/scan.stderr || rc=$?
+          echo "$rc" > bandit-evidence/scan-exit-code.txt
+          cat bandit-evidence/scan.stderr
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::Bandit execution error: $rc"
+            exit "$rc"
+          fi
+          cp bandit-report.sarif bandit-evidence/before-upload.sarif
+          echo "Bandit exit $rc (non-blocking findings)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Validate SARIF and source locations
+        run: python3 "$RUNNER_TEMP/verify-bandit.py" before
+      - name: Check temporary private action access
+        env:
+          PRIVATE_ACTIONS_READ_TOKEN: ${{ secrets.PRIVATE_ACTIONS_READ_TOKEN }}
+        run: test -n "$PRIVATE_ACTIONS_READ_TOKEN" || { echo '::error::Temporary private action credential unavailable'; exit 1; }
+      - name: Checkout uploader (temporary until plugin is public)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: openlibing-test/upload-sarif-action
+          ref: 05d5ea9e9f9a76497022ccab322f6dc22d827820
+          token: ${{ secrets.PRIVATE_ACTIONS_READ_TOKEN }}
+          path: .private-actions/upload-sarif-action
+          persist-credentials: false
+      - name: Upload SARIF to openLiBing beta
+        uses: ./.private-actions/upload-sarif-action
+        with:
+          sarif_file: bandit-report.sarif
+          source_path: .
+          env_type: beta
+      - name: Verify report after upload
+        run: python3 "$RUNNER_TEMP/verify-bandit.py" after
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bandit-verification
+          path: |
+            bandit-report.sarif
+            bandit-evidence/
+          if-no-files-found: warn
+  repository-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - name: Run required repository checks on changed file
+        run: uv run --only-dev --locked prek run --files .github/workflows/bandit-scan.yml
