@@ -1,0 +1,79 @@
+name: Clippy documentation verification
+on:
+  workflow_dispatch:
+  push:
+    branches: [validation/cargo-clippy-docs]
+    paths:
+      - .github/workflows/clippy-scan.yml
+      - .github/clippy/**
+permissions:
+  contents: read
+  id-token: write
+env:
+  RUST_TOOLCHAIN: '1.98.1'
+  CLIPPY_SARIF: '0.8.0'
+jobs:
+  clippy-scan-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: setup-rust
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --component clippy --no-self-update
+          rustup default "$RUST_TOOLCHAIN"
+          mkdir -p clippy-evidence
+          rustup show > clippy-evidence/toolchains.txt
+          rustup --version
+          cargo --version
+          rustc --version
+      - name: install clippy-sarif
+        run: |
+          if ! command -v clippy-sarif >/dev/null 2>&1; then
+            cargo install clippy-sarif --version "$CLIPPY_SARIF" --locked
+          fi
+      - name: cargo-clippy-scan
+        run: |
+          mkdir -p clippy-evidence
+          set +e
+          cargo clippy --message-format=json 2>clippy-evidence/cargo-stderr.txt | tee clippy-evidence/cargo.jsonl | clippy-sarif > clippy-evidence/clippy-results.sarif
+          statuses=("${PIPESTATUS[@]}")
+          printf '%s\n' "${statuses[@]}" > clippy-evidence/pipeline-status.txt
+          cp clippy-evidence/clippy-results.sarif clippy-evidence/before-upload.sarif
+          cat clippy-evidence/cargo-stderr.txt
+          cat clippy-evidence/clippy-results.sarif
+          for status in "${statuses[@]}"; do
+            if [ "$status" -ne 0 ]; then exit "$status"; fi
+          done
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: '0.13.7'
+          enable-cache: false
+      - name: Audit SARIF and diagnostics
+        run: uv run --no-project .github/clippy/audit.py before
+      - name: Checkout private uploader after scanning
+        uses: actions/checkout@v4
+        with:
+          repository: openlibing-test/upload-sarif-action
+          ref: 05d5ea9e9f9a76497022ccab322f6dc22d827820
+          token: ${{ secrets.PRIVATE_ACTIONS_READ_TOKEN }}
+          path: .private-actions/upload-sarif-action
+          persist-credentials: false
+      - name: Upload SARIF to openLiBing beta
+        uses: ./.private-actions/upload-sarif-action
+        with:
+          sarif_file: clippy-evidence/clippy-results.sarif
+          source_path: .
+          env_type: beta
+      - name: Audit enriched SARIF
+        if: ${{ success() }}
+        run: uv run --no-project .github/clippy/audit.py after
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clippy-evidence-${{ github.run_id }}
+          path: clippy-evidence/
+          if-no-files-found: warn
