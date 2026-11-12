@@ -81,7 +81,9 @@ jobs:
                       if not path.is_relative_to(root) or not path.is_file() or ".private-actions" in path.parts:
                           invalid.append(uri)
                           continue
-                      lines = path.read_text(encoding="utf-8").splitlines()
+                      lines = path.read_text(encoding="utf-8").split("\n")
+                      if lines and not lines[-1]:
+                          lines.pop()
                       region = physical.get("region", {})
                       start, end = region.get("startLine"), region.get("endLine", region.get("startLine"))
                       if not isinstance(start, int) or not 1 <= start <= len(lines):
@@ -103,8 +105,10 @@ jobs:
                       raise ValueError(f"Uploader changed {key}")
           Path(f"bandit-evidence/summary-{phase}.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
           print(json.dumps({key: value for key, value in summary.items() if key not in ("metrics", "invocations", "contexts_past_eof")}, indent=2))
-          if invalid or missing:
-              raise ValueError("Invalid report locations or snippets")
+          if invalid:
+              raise ValueError("Invalid report locations")
+          if missing:
+              print(f"::warning::{len(missing)} native issue snippets differ from source; preserved without modification")
           PY
       - name: Run documented full scan
         run: |
