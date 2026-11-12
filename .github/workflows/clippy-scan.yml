@@ -24,11 +24,14 @@ jobs:
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --component clippy --no-self-update
           rustup default "$RUST_TOOLCHAIN"
+          export RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN"
+          echo "RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN" >> "$GITHUB_ENV"
           mkdir -p clippy-evidence
           rustup show > clippy-evidence/toolchains.txt
           rustup --version
           cargo --version
           rustc --version
+          cargo metadata --no-deps --format-version 1 > clippy-evidence/cargo-metadata.json
       - name: install clippy-sarif
         run: |
           if ! command -v clippy-sarif >/dev/null 2>&1; then
