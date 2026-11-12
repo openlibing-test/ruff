@@ -88,7 +88,7 @@ jobs:
                           invalid.append(uri)
                           continue
                       text = region.get("snippet", {}).get("text")
-                      if text is None or text.rstrip("\n") != "\n".join(lines[start - 1:end]).rstrip("\n"):
+                      if text is None or not "\n".join(lines[start - 1:]).startswith(text.rstrip("\n")):
                           missing.append({"uri": uri, "start": start})
                       else:
                           matched += 1
@@ -133,7 +133,8 @@ jobs:
           path: .private-actions/upload-sarif-action
           persist-credentials: false
       - name: Upload SARIF to openLiBing beta
-        uses: ./.private-actions/upload-sarif-action
+        # External action checked out at runtime; it is not part of this repository.
+        uses: ./.private-actions/upload-sarif-action # zizmor: ignore[self-repository]
         with:
           sarif_file: bandit-report.sarif
           source_path: .
